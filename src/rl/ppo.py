@@ -121,7 +121,6 @@ class PPO:
         old_actions = torch.squeeze(torch.stack(memory.actions)).detach()
         old_logprobs = torch.squeeze(torch.stack(memory.logprobs)).detach()
         
-
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
             # shuffle data
@@ -132,7 +131,7 @@ class PPO:
             rewards = rewards[randperm]
 
             batch_start = 0
-            batch_size = 32
+            batch_size = 8
             while batch_start < len(old_actions):
                 # images_batch = old_images[batch_start: batch_start+batch_size].cuda()
                 ee_pos_batch = old_ee_pos[batch_start: batch_start+batch_size].cuda()
@@ -148,6 +147,10 @@ class PPO:
 
                 # Finding Surrogate Loss:
                 advantages = rewards_batch - state_values.detach()   
+                
+                #normalizing the advantages 
+                advantages = (advantages -  advantages.mean()) / (advantages.std() + 1e-5)
+
                 surr1 = ratios * advantages
                 surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
                 loss = -torch.min(surr1, surr2) + 0.5*self.MseLoss(state_values.float(), rewards_batch.float())

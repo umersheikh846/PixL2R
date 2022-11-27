@@ -6,14 +6,15 @@ import numpy as np
 from datetime import datetime
 from PIL import Image
 import sys
+import os
 from collections import namedtuple
 sys.path.insert(0, '../../metaworld')
 sys.path.insert(0, '../supervised')
 from metaworld.envs.mujoco.sawyer_xyz.sawyer_random import SawyerRandomEnv
-from model import Predict
+from src.supervised.model import Predict
 import pickle
 from ppo import Memory, ActorCritic, PPO
-from utils import objects, enable_gpu_rendering
+from utils import objects, enable_gpu_rendering, GymWrapper
 
 def load_env(infile):
     positions = []
@@ -33,7 +34,7 @@ def load_env(infile):
 
 class LangModule:
     def __init__(self, args):
-        self.lang_network = Predict(args.model_file, lr=0, n_updates=0)
+        self.lang_network = Predict(args.modelfile, lr=0, n_updates=0)
         self.descr = self.load_description(args)
         self.traj_r = []
         self.traj_l = []
@@ -51,9 +52,9 @@ class LangModule:
         return torch.Tensor(result)
 
     def load_description(self, args, mode='test'):
-        vocab = pickle.load(open('../../data/vocab_train.pkl', 'rb'))
-        descriptions = pickle.load(open('../../data/{}_descr.pkl'.format(mode), 'rb'))
-        return self.encode_description(vocab, descriptions[args.obj_id][args.descr_id])
+        vocab = pickle.load(open(os.path.dirname(__file__)+'/../../data/vocab_train.pkl', 'rb'))
+        descriptions = pickle.load(open(os.path.dirname(__file__)+'/../../data/{}_descr.pkl'.format(mode), 'rb'))
+        return self.encode_description(vocab, descriptions[args.objid][args.descrid])
 
     def update(self, img_left, img_center, img_right):
         img_left = Image.fromarray(img_left)
@@ -77,8 +78,8 @@ class LangModule:
 
 def main(args):
     ############## Hyperparameters ##############
-    log_interval = 100           # print avg reward in the interval
-    save_interval = 500
+    log_interval = 500           # print avg reward in the interval
+    save_interval = 1000
     max_total_timesteps = args.max_total_timesteps
     if max_total_timesteps == 0:
         max_total_timesteps = np.inf
@@ -87,14 +88,14 @@ def main(args):
     action_std = args.action_std            # constant std for action distribution (Multivariate Normal)
     K_epochs = args.K_epochs               # update policy for K epochs
     eps_clip = args.eps_clip              # clip parameter for PPO
-    gamma = 0.99                # discount factor
+    #gamma = 0.99                # discount factor
+    gamma = 0.9                # discount factor
     
     lr = 0.0003                 # parameters for Adam optimizer
     betas = (0.9, 0.999)
     
     # creating environment
-    positions, obj_ids = load_env(
-        '../../data/envs/obj{}-env{}.txt'.format(args.obj_id, args.env_id))
+    positions, obj_ids = load_env(os.path.dirname(__file__)+'/../../data/envs/obj{}-env{}.txt'.format(args.objid, args.envid))
     state_dim = 6
     action_dim = 4
 
@@ -111,9 +112,10 @@ def main(args):
         objects=objects, 
         positions=positions, 
         obj_ids=obj_ids, 
-        reward_type=args.reward_type,
+        reward_type=args.rewardtype,
         max_timesteps = args.max_timesteps)
-    if args.model_file is not None:
+    env = GymWrapper(env)
+    if args.modelfile is not None:
         lang_module = LangModule(args)
 
     total_steps = 0
@@ -121,7 +123,7 @@ def main(args):
     while True:
         i_episode += 1
         state = env.reset()
-        if args.model_file is not None:
+        if args.modelfile is not None:
             img_left, img_center, img_right, _ = env.get_frame()
             lang_module.update(img_left, img_center, img_right)
         # for t in range(args.max_timesteps):
@@ -131,7 +133,7 @@ def main(args):
             action = ppo.select_action(state, memory)
             state, reward, done, success = env.step(action)
 
-            if args.model_file is not None:
+            if args.modelfile is not None:
                 img_left, img_center, img_right, _ = env.get_frame()
                 lang_module.update(img_left, img_center, img_right)
                 potentials = lang_module.get_rewards(done)
@@ -167,21 +169,21 @@ def main(args):
                 torch.save(ppo.policy.state_dict(), args.save_path)
                 break
 
-        if args.model_file and i_episode % save_interval == 0:
-            torch.save(ppo.policy.state_dict(), args.model_file)
+        if args.modelfile and i_episode % save_interval == 0:
+            torch.save(ppo.policy.state_dict(), args.modelfile)
         
 def get_args():
     import argparse
     parser = argparse.ArgumentParser('Train PPO policy')
     parser.add_argument('--random-init', type=int, help='Environment seed')
-    parser.add_argument('--reward-type', help='sparse | dense')
-    parser.add_argument('--model-file', help='Path to trained PixL2R model', default=None)
+    parser.add_argument('--rewardtype', help='sparse | dense')
+    parser.add_argument('--modelfile', help='Path to trained PixL2R model', default=None)
     parser.add_argument('--save-path', help='')
-    parser.add_argument('--obj-id', type=int, help='Index of main object; 0-12')
-    parser.add_argument('--env-id', type=int, help='Index of environment; 0-99')
-    parser.add_argument('--descr-id', type=int, help='Index of description; 0-2')
+    parser.add_argument('--objid', type=int, help='Index of main object; 0-12')
+    parser.add_argument('--envid', type=int, help='Index of environment; 0-99')
+    parser.add_argument('--descrid', type=int, help='Index of description; 0-2')
     parser.add_argument('--max-timesteps', type=int, default=500)
-    parser.add_argument('--max-total-timesteps', type=int, default=500000)
+    parser.add_argument('--max-total-timesteps', type=int, default=200000)
     parser.add_argument('--update-timestep', type=int, default=2000)
     parser.add_argument('--action-std', type=float, default=0.5)
     parser.add_argument('--K-epochs', type=int, default=10)

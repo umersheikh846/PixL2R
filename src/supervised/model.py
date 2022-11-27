@@ -1,4 +1,5 @@
-from data import Data, PadBatch
+from src.supervised.data import Data, PadBatch
+#from data import Data, PadBatch
 import pickle
 import torch
 import torch.nn as nn
@@ -277,6 +278,7 @@ class Train:
         pred_all = []
         labels_all = []
         loss_all = []
+        # import ipdb; ipdb.set_trace()
         for frames_r, frames_l, frames_c, descr, descr_enc, \
             traj_len, descr_len, labels, _, _, weights in data_loader:
             pred, loss = self.run_batch(
@@ -323,13 +325,9 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=PadBatch(),
-        num_workers=16)
-    valid_data_loader = DataLoader(
-        dataset=valid_data,
-        batch_size=args.batch_size,
-        shuffle=True,
-        collate_fn=PadBatch(),
-        num_workers=16)
+        num_workers=6)
+    valid_data_loader = DataLoader(dataset=valid_data, batch_size=args.batch_size,
+        shuffle=True, collate_fn=PadBatch(), num_workers=6)
     Train(args, train_data_loader, valid_data_loader).train_model()
 
 def get_args():

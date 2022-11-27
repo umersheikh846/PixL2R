@@ -1,3 +1,51 @@
+import numpy as np
+import pandas as pd
+import gym
+
+class GymWrapper(gym.Wrapper):
+    def __init__(self, env, out_csv_name='results/rewards'):
+        self.out_csv_name = out_csv_name
+        self.metrics = []
+        self.run = 0
+        self.step_index = 0
+
+        super(GymWrapper, self).__init__(env)
+        
+
+    def reset(self):
+        """
+        Reset the environment 
+        """
+        obs = self.env.reset()
+        return obs
+
+    def step(self, action):
+        self.step_index +=1
+        obs, reward, done, success = self.env.step(action)
+        info = self._compute_step_info(success, reward)
+        self.metrics.append(info)
+        
+        if done:
+            self.save_csv(self.out_csv_name, self.run)
+            self.run += 1
+            self.metrics = []
+            self.step_index = 0
+        return obs, reward, done, success
+    
+    def _compute_step_info(self, success, reward):
+        return {
+            'current_step': self.step_index,
+            'success': success,
+            'Reward': reward,
+        }
+    def save_csv(self, out_csv_name, run):
+        if out_csv_name is not None:
+            df = pd.DataFrame(self.metrics)
+            df.to_csv(out_csv_name + '_run{}'.format(run) + '.csv', index=False)
+
+    def close(self):
+        pass
+
 objects = [ 
             'button_top', 
             'button_side', 

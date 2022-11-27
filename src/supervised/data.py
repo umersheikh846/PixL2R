@@ -95,8 +95,12 @@ class Data(Dataset):
         return result
 
     def load_frames(self, obj, env):
+        
         frames_r = torch.from_numpy(torch.load(open('{}/obj{}-env{}-right-50x50.pt'.format(FRAMES_DIR, obj, env), 'rb')))
-        frames_l = torch.from_numpy(torch.load(open('{}/obj{}-env{}-left-50x50.pt'.format(FRAMES_DIR, obj, env), 'rb')))
+        try:
+            frames_l = torch.from_numpy(torch.load(open('{}/obj{}-env{}-left-50x50.pt'.format(FRAMES_DIR, obj, env), 'rb')))
+        except:
+            print(FRAMES_DIR, obj, env)
         frames_c = torch.from_numpy(torch.load(open('{}/obj{}-env{}-center-50x50.pt'.format(FRAMES_DIR, obj, env), 'rb')))
         n_frames_total = len(frames_r)
 
